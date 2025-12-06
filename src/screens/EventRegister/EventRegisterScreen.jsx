@@ -9,17 +9,20 @@ import {
   InputField,
   Spinner,
   Text,
-  VStack
+  VStack,
 } from '@gluestack-ui/themed';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, ScrollView } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'http://localhost:3333'
+const API_URL = 'http://localhost:3333';
 
 export function EventRegisterScreen({ route, navigation }) {
-  const { event, fromMyEvents } = route.params || {};
+  const { event, fromMyEvents, isSubscribed: isSubscribedFromHome } =
+    route.params || {};
+
   const isMyEvent = !!fromMyEvents;
+  const alreadySubscribed = !!isSubscribedFromHome || !!fromMyEvents;
 
   const { user, token } = useAuth();
 
@@ -40,6 +43,7 @@ export function EventRegisterScreen({ route, navigation }) {
   const [people, setPeople] = useState([{ id: 1, name: '', age: '' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isLoadingMyParticipants, setIsLoadingMyParticipants] = useState(false);
 
   function handleChangePerson(index, field, value) {
     const updated = [...people];
@@ -55,17 +59,71 @@ export function EventRegisterScreen({ route, navigation }) {
     setPeople(prev => prev.filter(p => p.id !== id));
   }
 
-  // 👉 INTEGRAR COM BACKEND: CRIAR INSCRIÇÃO
+  // 🔎 Busca participantes já inscritos para ESTE evento + usuário logado
+  useEffect(() => {
+    if (!user || !token || !alreadySubscribed) return;
+
+    async function fetchMyParticipants() {
+      try {
+        setIsLoadingMyParticipants(true);
+
+        const response = await fetch(
+          `${API_URL}/eventos/${currentEvent.id}/inscricoes/${user.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (response.status === 404) {
+          // não tem inscrição registrada
+          return;
+        }
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch {
+          data = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Erro ao buscar inscrição');
+        }
+
+        // espera algo como { participantes: [ { nome, idade }, ... ] }
+        if (Array.isArray(data.participantes) && data.participantes.length) {
+          const mapped = data.participantes.map((p, index) => ({
+            id: index + 1,
+            name: p.nome,
+            age: p.idade != null ? String(p.idade) : '',
+          }));
+          setPeople(mapped);
+        }
+      } catch (err) {
+        console.log(
+          '[EventRegisterScreen] erro ao buscar participantes inscritos:',
+          err,
+        );
+      } finally {
+        setIsLoadingMyParticipants(false);
+      }
+    }
+
+    fetchMyParticipants();
+  }, [user, token, currentEvent.id, alreadySubscribed]);
+
+  // 👉 Criar / atualizar inscrição (pode ser usado tanto primeira vez quanto depois)
   async function handleSubmit() {
     if (!token || !user) {
       Alert.alert(
         'Sessão expirada',
-        'Faça login novamente para se inscrever no evento.'
+        'Faça login novamente para se inscrever no evento.',
       );
       return;
     }
 
-    // filtra participantes válidos (pelo menos nome)
     const participantesValidos = people
       .filter(p => p.name && p.name.trim())
       .map(p => ({
@@ -76,7 +134,7 @@ export function EventRegisterScreen({ route, navigation }) {
     if (!participantesValidos.length) {
       Alert.alert(
         'Dados incompletos',
-        'Informe pelo menos o nome de um participante.'
+        'Informe pelo menos o nome de um participante.',
       );
       return;
     }
@@ -85,16 +143,16 @@ export function EventRegisterScreen({ route, navigation }) {
       setIsSubmitting(true);
 
       const payload = {
-        usuarioId: user.id,          // 👈 precisa bater com o que o back espera
+        usuarioId: user.id,
         participantes: participantesValidos,
       };
 
       console.log('[EventRegisterScreen] enviando inscrição:', payload);
 
       const response = await fetch(
-        `${API_URL}/eventos/${currentEvent.id}/inscricoes`, // 👈 ajuste se a rota for diferente
+        `${API_URL}/eventos/${currentEvent.id}/inscricoes`,
         {
-          method: 'POST',
+          method: 'POST', // o back trata como "criar ou atualizar"
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
@@ -117,12 +175,14 @@ export function EventRegisterScreen({ route, navigation }) {
       );
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Erro ao realizar inscrição');
+        throw new Error(data?.error || 'Erro ao salvar inscrição');
       }
 
       Alert.alert(
-        'Inscrição realizada',
-        'Sua inscrição foi registrada com sucesso!',
+        alreadySubscribed ? 'Inscrição atualizada' : 'Inscrição realizada',
+        alreadySubscribed
+          ? 'Sua inscrição foi atualizada com sucesso!'
+          : 'Sua inscrição foi registrada com sucesso!',
         [
           {
             text: 'OK',
@@ -136,18 +196,18 @@ export function EventRegisterScreen({ route, navigation }) {
       );
     } catch (err) {
       console.log('[EventRegisterScreen] erro ao inscrever:', err);
-      Alert.alert('Erro', err.message || 'Erro ao realizar inscrição');
+      Alert.alert('Erro', err.message || 'Erro ao salvar inscrição');
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  // 👉 INTEGRAR COM BACKEND: CANCELAR INSCRIÇÃO (modo Meus Eventos)
+  // 👉 Cancelar inscrição (usado principalmente em Meus Eventos)
   async function handleCancelSubscription() {
     if (!token || !user) {
       Alert.alert(
         'Sessão expirada',
-        'Faça login novamente para cancelar sua inscrição.'
+        'Faça login novamente para cancelar sua inscrição.',
       );
       return;
     }
@@ -155,8 +215,6 @@ export function EventRegisterScreen({ route, navigation }) {
     try {
       setIsCanceling(true);
 
-      // Exemplo de rota de cancelamento:
-      // DELETE /eventos/:id/inscricoes/:usuarioId
       const response = await fetch(
         `${API_URL}/eventos/${currentEvent.id}/inscricoes/${user.id}`,
         {
@@ -173,6 +231,12 @@ export function EventRegisterScreen({ route, navigation }) {
       } catch {
         data = {};
       }
+
+      console.log(
+        '[EventRegisterScreen] resposta cancelamento:',
+        response.status,
+        data,
+      );
 
       if (!response.ok) {
         throw new Error(data?.error || 'Erro ao cancelar inscrição');
@@ -197,8 +261,12 @@ export function EventRegisterScreen({ route, navigation }) {
   }
 
   const isConfirmDisabled =
-    isMyEvent || isSubmitting ||
+    isSubmitting ||
     !people.some(p => p.name && p.name.trim());
+
+  const confirmButtonLabel = alreadySubscribed
+    ? 'Atualizar inscrição'
+    : 'Confirmar inscrição';
 
   return (
     <Box flex={1} bg="#F3F4F6">
@@ -330,156 +398,182 @@ export function EventRegisterScreen({ route, navigation }) {
           </VStack>
         </Box>
 
-        {/* INSCRIÇÃO DOS PARTICIPANTES (só se NÃO vier de Meus eventos) */}
-        {!isMyEvent && (
-          <>
-            <Box mt="$4">
-              <Text
-                fontSize={16}
-                color="#111827"
-                style={{ fontWeight: '600' }}
-              >
-                Inscrição dos participantes
-              </Text>
-
-              <Text
-                fontSize={12}
-                color="#6B7280"
-                mt="$1"
-              >
-                Você pode se inscrever e também adicionar familiares ou amigos
-                que não têm conta no app.
-              </Text>
-
-              <Box
-                mt="$3"
-                bg="#ffffff"
-                borderRadius={16}
-                p="$3"
-                borderWidth={1}
-                borderColor="#E5E7EB"
-              >
-                <VStack space="md">
-                  {people.map((person, index) => (
-                    <Box
-                      key={person.id}
-                      p="$3"
-                      borderRadius={12}
-                      bg="#F9FAFB"
-                      borderWidth={1}
-                      borderColor="#E5E7EB"
-                      mt={index > 0 ? '$2' : 0}
-                    >
-                      <HStack
-                        justifyContent="space-between"
-                        mb="$2"
-                        alignItems="center"
-                      >
-                        <Text
-                          fontSize={13}
-                          color="#4B5563"
-                          style={{ fontWeight: '600' }}
-                        >
-                          Participante {index + 1}
-                        </Text>
-
-                        {index > 0 && (
-                          <Text
-                            fontSize={11}
-                            color="#DC2626"
-                            onPress={() => handleRemovePerson(person.id)}
-                            style={{ fontWeight: '600' }}
-                          >
-                            Remover
-                          </Text>
-                        )}
-                      </HStack>
-
-                      {/* Nome */}
-                      <VStack space="xs" mb="$3">
-                        <Text fontSize={12} color="#6B7280">
-                          Nome completo
-                        </Text>
-                        <Input bg="#FFFFFF" borderColor="#E5E7EB">
-                          <InputField
-                            value={person.name}
-                            onChangeText={text =>
-                              handleChangePerson(index, 'name', text)
-                            }
-                            placeholder="Digite o nome"
-                            placeholderTextColor="#9CA3AF"
-                            style={{
-                              color: '#111827',
-                              fontSize: 14,
-                            }}
-                          />
-                        </Input>
-                      </VStack>
-
-                      {/* Idade */}
-                      <VStack space="xs">
-                        <Text fontSize={12} color="#6B7280">
-                          Idade
-                        </Text>
-                        <Input bg="#FFFFFF" borderColor="#E5E7EB">
-                          <InputField
-                            value={person.age}
-                            onChangeText={text =>
-                              handleChangePerson(index, 'age', text)
-                            }
-                            placeholder="Ex: 12"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="numeric"
-                            style={{
-                              color: '#111827',
-                              fontSize: 14,
-                            }}
-                          />
-                        </Input>
-                      </VStack>
-                    </Box>
-                  ))}
-
-                  {/* Botão para adicionar pessoa dentro do card */}
-                  <Button
-                    variant="outline"
-                    borderColor="#3B82F6"
-                    onPress={handleAddPerson}
-                  >
-                    <ButtonText color="#2563EB">
-                      Adicionar participante
-                    </ButtonText>
-                  </Button>
-                </VStack>
-              </Box>
-            </Box>
-
-            {/* BOTÃO PRINCIPAL (confirmar inscrição) */}
-            <Box mt="$4">
-              <Button
-                size="lg"
-                onPress={handleSubmit}
-                isDisabled={isConfirmDisabled}
-                opacity={isConfirmDisabled ? 0.6 : 1}
-              >
-                {isSubmitting ? (
-                  <HStack alignItems="center" space="sm">
-                    <Spinner color="$white" />
-                    <ButtonText style={{ fontWeight: '600' }}>
-                      Enviando...
-                    </ButtonText>
-                  </HStack>
-                ) : (
-                  <ButtonText style={{ fontWeight: '600' }}>
-                    Confirmar inscrição
-                  </ButtonText>
-                )}
-              </Button>
-            </Box>
-          </>
+        {/* AVISO DE JÁ INSCRITO */}
+        {alreadySubscribed && (
+          <Box mt="$4" bg="#ECFDF3" borderRadius={16} p="$3" borderWidth={1} borderColor="#BBF7D0">
+            <Text
+              fontSize={13}
+              color="#15803D"
+              style={{ fontWeight: '600' }}
+            >
+              Você já está inscrito neste evento.
+            </Text>
+            <Text fontSize={12} color="#166534" mt="$1">
+              Os participantes abaixo são da sua inscrição atual. 
+              Você pode editar, remover ou adicionar novos participantes e depois clicar em "{confirmButtonLabel}".
+            </Text>
+          </Box>
         )}
 
-        {/* MODO "MEUS EVENTOS" → apenas botão de cancelar inscrição */}
+        {/* FORMULÁRIO DE INSCRIÇÃO / EDIÇÃO */}
+        <Box mt="$4">
+          <Text
+            fontSize={16}
+            color="#111827"
+            style={{ fontWeight: '600' }}
+          >
+            {alreadySubscribed
+              ? 'Editar participantes da sua inscrição'
+              : 'Inscrição dos participantes'}
+          </Text>
+
+          {!alreadySubscribed && (
+            <Text
+              fontSize={12}
+              color="#6B7280"
+              mt="$1"
+            >
+              Você pode se inscrever e também adicionar familiares ou amigos
+              que não têm conta no app.
+            </Text>
+          )}
+
+          <Box
+            mt="$3"
+            bg="#ffffff"
+            borderRadius={16}
+            p="$3"
+            borderWidth={1}
+            borderColor="#E5E7EB"
+          >
+            {isLoadingMyParticipants ? (
+              <HStack alignItems="center" space="sm">
+                <Spinner />
+                <Text fontSize={12} color="#6B7280">
+                  Carregando participantes...
+                </Text>
+              </HStack>
+            ) : (
+              <VStack space="md">
+                {people.map((person, index) => (
+                  <Box
+                    key={person.id}
+                    p="$3"
+                    borderRadius={12}
+                    bg="#F9FAFB"
+                    borderWidth={1}
+                    borderColor="#E5E7EB"
+                    mt={index > 0 ? '$2' : 0}
+                  >
+                    <HStack
+                      justifyContent="space-between"
+                      mb="$2"
+                      alignItems="center"
+                    >
+                      <Text
+                        fontSize={13}
+                        color="#4B5563"
+                        style={{ fontWeight: '600' }}
+                      >
+                        Participante {index + 1}
+                      </Text>
+
+                      {index > 0 && (
+                        <Text
+                          fontSize={11}
+                          color="#DC2626"
+                          onPress={() => handleRemovePerson(person.id)}
+                          style={{ fontWeight: '600' }}
+                        >
+                          Remover
+                        </Text>
+                      )}
+                    </HStack>
+
+                    {/* Nome */}
+                    <VStack space="xs" mb="$3">
+                      <Text fontSize={12} color="#6B7280">
+                        Nome completo
+                      </Text>
+                      <Input bg="#FFFFFF" borderColor="#E5E7EB">
+                        <InputField
+                          value={person.name}
+                          onChangeText={text =>
+                            handleChangePerson(index, 'name', text)
+                          }
+                          placeholder="Digite o nome"
+                          placeholderTextColor="#9CA3AF"
+                          style={{
+                            color: '#111827',
+                            fontSize: 14,
+                          }}
+                        />
+                      </Input>
+                    </VStack>
+
+                    {/* Idade */}
+                    <VStack space="xs">
+                      <Text fontSize={12} color="#6B7280">
+                        Idade
+                      </Text>
+                      <Input bg="#FFFFFF" borderColor="#E5E7EB">
+                        <InputField
+                          value={person.age}
+                          onChangeText={text =>
+                            handleChangePerson(index, 'age', text)
+                          }
+                          placeholder="Ex: 12"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="numeric"
+                          style={{
+                            color: '#111827',
+                            fontSize: 14,
+                          }}
+                        />
+                      </Input>
+                    </VStack>
+                  </Box>
+                ))}
+
+                {/* Botão para adicionar pessoa dentro do card */}
+                <Button
+                  variant="outline"
+                  borderColor="#3B82F6"
+                  onPress={handleAddPerson}
+                >
+                  <ButtonText color="#2563EB">
+                    Adicionar participante
+                  </ButtonText>
+                </Button>
+              </VStack>
+            )}
+          </Box>
+        </Box>
+
+        {/* BOTÃO PRINCIPAL (criar/atualizar inscrição) */}
+        <Box mt="$4">
+          <Button
+            size="lg"
+            onPress={handleSubmit}
+            isDisabled={isConfirmDisabled}
+            opacity={isConfirmDisabled ? 0.6 : 1}
+          >
+            {isSubmitting ? (
+              <HStack alignItems="center" space="sm">
+                <Spinner color="$white" />
+                <ButtonText style={{ fontWeight: '600' }}>
+                  {alreadySubscribed ? 'Atualizando...' : 'Enviando...'}
+                </ButtonText>
+              </HStack>
+            ) : (
+              <ButtonText style={{ fontWeight: '600' }}>
+                {confirmButtonLabel}
+              </ButtonText>
+            )}
+          </Button>
+        </Box>
+
+        {/* MODO "MEUS EVENTOS" → botão de cancelar inscrição */}
         {isMyEvent && (
           <Box mt="$4">
             <Button
