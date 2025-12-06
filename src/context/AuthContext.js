@@ -1,12 +1,14 @@
 // src/context/AuthContext.js
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useState } from 'react';
 
-const API_URL = 'http://localhost:3333'; 
 
+const API_URL = 'http://localhost:3333'
 const AuthContext = createContext(undefined);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(false);
 
   async function signIn(email, password) {
@@ -19,7 +21,7 @@ export function AuthProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
-          senha: password, // 👈 tem que bater com o back
+          senha: password,
         }),
       });
 
@@ -33,14 +35,29 @@ export function AuthProvider({ children }) {
       console.log('[Auth] status login:', response.status, 'body:', data);
 
       if (!response.ok) {
-        const msg = data?.error || `Erro ao fazer login (status ${response.status})`;
+        const msg =
+          data?.error || `Erro ao fazer login (status ${response.status})`;
         throw new Error(msg);
       }
 
-      setUser(data.user);
-      console.log('[Auth] login bem-sucedido:', data.user);
+      // normaliza o user pra bater com o que você usa na UI (name / email)
+      const normalizedUser = {
+        id: data.user.id,
+        name: data.user.nome,
+        email: data.user.email,
+        type: data.user.tipo,
+      };
 
-      return data.user;
+      setUser(normalizedUser);
+      setToken(data.token);
+
+      // salva pra uso futuro (auto-login depois se quiser)
+      await AsyncStorage.setItem('@auth_token', data.token);
+      await AsyncStorage.setItem('@auth_user', JSON.stringify(normalizedUser));
+
+      console.log('[Auth] login bem-sucedido:', normalizedUser);
+
+      return normalizedUser;
     } catch (err) {
       console.log('[Auth] erro signIn:', err);
       throw err;
@@ -49,13 +66,32 @@ export function AuthProvider({ children }) {
     }
   }
 
-  function signOut() {
-    setUser(null);
+  // LOGOUT COMPLETO
+  async function signOut() {
+    try {
+      if (token) {
+        // chama o back só pra manter fluxo bonitinho
+        await fetch(`${API_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch (err) {
+      console.log('[Auth] erro ao chamar /auth/logout:', err);
+      // mesmo que o back falhe, vamos limpar o front assim mesmo
+    } finally {
+      setUser(null);
+      setToken(null);
+      await AsyncStorage.removeItem('@auth_token');
+      await AsyncStorage.removeItem('@auth_user');
+    }
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoadingAuth, signIn, signOut }}
+      value={{ user, token, isLoadingAuth, signIn, signOut }}
     >
       {children}
     </AuthContext.Provider>
