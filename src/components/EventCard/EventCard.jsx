@@ -15,12 +15,13 @@ export function EventCard({
   subscribersCount,
   imageUrl,
   onPress,
-  isSubscribed = false,   // 👈 NOVO
+  isSubscribed = false, // 👈 flag opcional
 }) {
-  const [day, month] = date.split('/');
+  // suporta "18/03" ou "18/03/2025"
+  const [day, month] = String(date || '').split('/');
   const monthNumber = parseInt(month, 10) || 1;
-  const monthLabel = MONTH_LABELS[monthNumber - 1] || month;
-  const isFree = price?.toLowerCase().includes('gratuito');
+  const monthLabel = MONTH_LABELS[monthNumber - 1] || month || '';
+  const isFree = price?.toLowerCase?.().includes('gratuito');
 
   return (
     <Pressable onPress={onPress} style={{ marginBottom: 12 }}>
@@ -70,21 +71,21 @@ export function EventCard({
             </Text>
           </Box>
 
-          {/* SELO "JÁ INSCRITO" */}
+          {/* BADGE "INSCRITO" – só aparece se isSubscribed === true */}
           {isSubscribed && (
             <Box
               px="$2"
               py="$1"
               borderRadius={999}
-              bg="rgba(22,163,74,0.9)"
+              bg="rgba(22, 163, 74, 0.95)"
               style={{ position: 'absolute', top: 10, right: 10 }}
             >
               <Text
-                fontSize={11}
-                color="#ECFDF5"
+                fontSize={10}
                 style={{ fontWeight: '700' }}
+                color="#ECFDF3"
               >
-                Já inscrito
+                JÁ INSCRITO
               </Text>
             </Box>
           )}
