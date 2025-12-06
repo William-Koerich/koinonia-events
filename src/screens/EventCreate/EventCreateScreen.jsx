@@ -1,22 +1,27 @@
 // src/screens/EventCreate/EventCreateScreen.js
 import {
-    Box,
-    Button,
-    ButtonText,
-    Divider,
-    HStack,
-    Input,
-    InputField,
-    Text,
-    Textarea,
-    TextareaInput,
-    VStack,
+  Box,
+  Button,
+  ButtonText,
+  Divider,
+  HStack,
+  Input,
+  InputField,
+  Text,
+  Textarea,
+  TextareaInput,
+  VStack,
 } from '@gluestack-ui/themed';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { Alert, Image, ScrollView } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
+
+const API_URL = 'http://localhost:3333'
 
 export function EventCreateScreen({ navigation }) {
+  const { user, token } = useAuth();
+
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');           // ex: 18/03/2025
   const [location, setLocation] = useState('');
@@ -24,6 +29,7 @@ export function EventCreateScreen({ navigation }) {
   const [imageUri, setImageUri] = useState('');
   const [description, setDescription] = useState('');
   const [attractions, setAttractions] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handlePickImage() {
     const { status } =
@@ -47,28 +53,81 @@ export function EventCreateScreen({ navigation }) {
     }
   }
 
-  function handleSubmit() {
-    const newEvent = {
-      id: Date.now().toString(),
-      date,
-      title,
-      location,
-      price: price || 'Gratuito',
-      subscribersCount: 0,
-      imageUrl: imageUri,        // <== vai como imageUrl
-      description,
-      attractions,
-    };
+  async function handleSubmit() {
+    if (!token) {
+      Alert.alert(
+        'Sessão expirada',
+        'Faça login novamente para criar eventos.'
+      );
+      return;
+    }
 
-    console.log('[EventCreateScreen] novo evento:', newEvent);
+    setIsSubmitting(true);
 
-    // TODO: aqui entra sua chamada de API pra salvar o evento
-    // await api.post('/events', newEvent)
+    try {
+      const payload = {
+        title,
+        date,
+        location,
+        price: price || 'Gratuito',
+        imageUrl: imageUri,
+        description,
+        attractions,
+        criadoPorId: user?.id ?? null,
+      };
 
-    Alert.alert('Evento criado', 'Evento criado com sucesso!');
+      console.log('[EventCreateScreen] enviando payload:', payload);
 
-    if (navigation && navigation.goBack) {
-      navigation.goBack();
+      const response = await fetch(`${API_URL}/eventos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      console.log('[EventCreateScreen] resposta criação:', response.status, data);
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Erro ao criar evento');
+      }
+
+      Alert.alert(
+        'Evento criado',
+        'Evento criado com sucesso!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (navigation && navigation.goBack) {
+                navigation.goBack();
+              }
+            },
+          },
+        ],
+      );
+
+      // opcional: limpar formulário
+      setTitle('');
+      setDate('');
+      setLocation('');
+      setPrice('');
+      setImageUri('');
+      setDescription('');
+      setAttractions('');
+    } catch (err) {
+      console.log('[EventCreateScreen] erro ao criar evento:', err);
+      Alert.alert('Erro', err.message || 'Erro ao criar evento');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -76,7 +135,8 @@ export function EventCreateScreen({ navigation }) {
     !title.trim() ||
     !date.trim() ||
     !location.trim() ||
-    !imageUri.trim();
+    !imageUri.trim() ||
+    isSubmitting;
 
   return (
     <Box flex={1} bg="#F3F4F6">
@@ -237,7 +297,11 @@ export function EventCreateScreen({ navigation }) {
                 )}
               </Box>
 
-              <Button variant="outline" borderColor="#3B82F6" onPress={handlePickImage}>
+              <Button
+                variant="outline"
+                borderColor="#3B82F6"
+                onPress={handlePickImage}
+              >
                 <ButtonText color="#2563EB">
                   Escolher imagem da galeria
                 </ButtonText>
@@ -304,7 +368,7 @@ export function EventCreateScreen({ navigation }) {
             opacity={isSubmitDisabled ? 0.6 : 1}
           >
             <ButtonText style={{ fontWeight: '600' }}>
-              Salvar evento
+              {isSubmitting ? 'Salvando...' : 'Salvar evento'}
             </ButtonText>
           </Button>
         </Box>
