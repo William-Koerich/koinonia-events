@@ -7,15 +7,21 @@ import {
   HStack,
   Input,
   InputField,
+  Spinner,
   Text,
-  VStack,
+  VStack
 } from '@gluestack-ui/themed';
 import { useState } from 'react';
 import { Alert, Image, ScrollView } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
+
+const API_URL = 'http://localhost:3333'
 
 export function EventRegisterScreen({ route, navigation }) {
   const { event, fromMyEvents } = route.params || {};
   const isMyEvent = !!fromMyEvents;
+
+  const { user, token } = useAuth();
 
   const currentEvent = event || {
     id: '1',
@@ -32,6 +38,8 @@ export function EventRegisterScreen({ route, navigation }) {
   };
 
   const [people, setPeople] = useState([{ id: 1, name: '', age: '' }]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   function handleChangePerson(index, field, value) {
     const updated = [...people];
@@ -47,29 +55,150 @@ export function EventRegisterScreen({ route, navigation }) {
     setPeople(prev => prev.filter(p => p.id !== id));
   }
 
-  function handleSubmit() {
-    console.log('Inscrição enviada:', {
-      eventId: currentEvent.id,
-      participants: people,
-    });
-    Alert.alert('Inscrição enviada', 'Depois entra a chamada de API aqui.');
-  }
+  // 👉 INTEGRAR COM BACKEND: CRIAR INSCRIÇÃO
+  async function handleSubmit() {
+    if (!token || !user) {
+      Alert.alert(
+        'Sessão expirada',
+        'Faça login novamente para se inscrever no evento.'
+      );
+      return;
+    }
 
-  function handleCancelSubscription() {
-    console.log('Cancelar inscrição do evento:', currentEvent.id);
-    // TODO: chamada de API pra cancelar inscrição
+    // filtra participantes válidos (pelo menos nome)
+    const participantesValidos = people
+      .filter(p => p.name && p.name.trim())
+      .map(p => ({
+        nome: p.name.trim(),
+        idade: p.age ? Number(p.age) : null,
+      }));
 
-    Alert.alert(
-      'Inscrição cancelada',
-      'Sua inscrição neste evento foi cancelada.',
-      [
+    if (!participantesValidos.length) {
+      Alert.alert(
+        'Dados incompletos',
+        'Informe pelo menos o nome de um participante.'
+      );
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const payload = {
+        usuarioId: user.id,          // 👈 precisa bater com o que o back espera
+        participantes: participantesValidos,
+      };
+
+      console.log('[EventRegisterScreen] enviando inscrição:', payload);
+
+      const response = await fetch(
+        `${API_URL}/eventos/${currentEvent.id}/inscricoes`, // 👈 ajuste se a rota for diferente
         {
-          text: 'OK',
-          onPress: () => navigation?.goBack && navigation.goBack(),
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
         },
-      ],
-    );
+      );
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      console.log(
+        '[EventRegisterScreen] resposta inscrição:',
+        response.status,
+        data,
+      );
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Erro ao realizar inscrição');
+      }
+
+      Alert.alert(
+        'Inscrição realizada',
+        'Sua inscrição foi registrada com sucesso!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (navigation && navigation.goBack) {
+                navigation.goBack();
+              }
+            },
+          },
+        ],
+      );
+    } catch (err) {
+      console.log('[EventRegisterScreen] erro ao inscrever:', err);
+      Alert.alert('Erro', err.message || 'Erro ao realizar inscrição');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
+
+  // 👉 INTEGRAR COM BACKEND: CANCELAR INSCRIÇÃO (modo Meus Eventos)
+  async function handleCancelSubscription() {
+    if (!token || !user) {
+      Alert.alert(
+        'Sessão expirada',
+        'Faça login novamente para cancelar sua inscrição.'
+      );
+      return;
+    }
+
+    try {
+      setIsCanceling(true);
+
+      // Exemplo de rota de cancelamento:
+      // DELETE /eventos/:id/inscricoes/:usuarioId
+      const response = await fetch(
+        `${API_URL}/eventos/${currentEvent.id}/inscricoes/${user.id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Erro ao cancelar inscrição');
+      }
+
+      Alert.alert(
+        'Inscrição cancelada',
+        'Sua inscrição neste evento foi cancelada.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation?.goBack && navigation.goBack(),
+          },
+        ],
+      );
+    } catch (err) {
+      console.log('[EventRegisterScreen] erro ao cancelar inscrição:', err);
+      Alert.alert('Erro', err.message || 'Erro ao cancelar inscrição');
+    } finally {
+      setIsCanceling(false);
+    }
+  }
+
+  const isConfirmDisabled =
+    isMyEvent || isSubmitting ||
+    !people.some(p => p.name && p.name.trim());
 
   return (
     <Box flex={1} bg="#F3F4F6">
@@ -327,10 +456,24 @@ export function EventRegisterScreen({ route, navigation }) {
 
             {/* BOTÃO PRINCIPAL (confirmar inscrição) */}
             <Box mt="$4">
-              <Button size="lg" onPress={handleSubmit}>
-                <ButtonText style={{ fontWeight: '600' }}>
-                  Confirmar inscrição
-                </ButtonText>
+              <Button
+                size="lg"
+                onPress={handleSubmit}
+                isDisabled={isConfirmDisabled}
+                opacity={isConfirmDisabled ? 0.6 : 1}
+              >
+                {isSubmitting ? (
+                  <HStack alignItems="center" space="sm">
+                    <Spinner color="$white" />
+                    <ButtonText style={{ fontWeight: '600' }}>
+                      Enviando...
+                    </ButtonText>
+                  </HStack>
+                ) : (
+                  <ButtonText style={{ fontWeight: '600' }}>
+                    Confirmar inscrição
+                  </ButtonText>
+                )}
               </Button>
             </Box>
           </>
@@ -344,12 +487,25 @@ export function EventRegisterScreen({ route, navigation }) {
               variant="outline"
               borderColor="#DC2626"
               onPress={handleCancelSubscription}
+              isDisabled={isCanceling}
+              opacity={isCanceling ? 0.6 : 1}
             >
-              <ButtonText
-                style={{ fontWeight: '600', color: '#DC2626' }}
-              >
-                Cancelar inscrição
-              </ButtonText>
+              {isCanceling ? (
+                <HStack alignItems="center" space="sm">
+                  <Spinner color="#DC2626" />
+                  <ButtonText
+                    style={{ fontWeight: '600', color: '#DC2626' }}
+                  >
+                    Cancelando...
+                  </ButtonText>
+                </HStack>
+              ) : (
+                <ButtonText
+                  style={{ fontWeight: '600', color: '#DC2626' }}
+                >
+                  Cancelar inscrição
+                </ButtonText>
+              )}
             </Button>
           </Box>
         )}
