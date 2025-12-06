@@ -5,11 +5,13 @@ import { useEffect, useState } from 'react';
 import { EventCard } from '../../components/EventCard/EventCard';
 import { useAuth } from '../../context/AuthContext';
 
-// Usa a mesma lógica de URL que você já usa no AuthContext
-const API_URL = 'http://localhost:3333'
+const API_URL = 'http://localhost:3333';
+
 export function HomeScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+
   const [events, setEvents] = useState([]);
+  const [subscribedEventIds, setSubscribedEventIds] = useState(new Set());
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [error, setError] = useState(null);
 
@@ -18,22 +20,48 @@ export function HomeScreen({ navigation }) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/eventos`);
-      let data = [];
+      // 1) busca todos os eventos
+      const [eventsRes, myEventsRes] = await Promise.all([
+        fetch(`${API_URL}/eventos`),
+        user
+          ? fetch(`${API_URL}/usuarios/${user.id}/eventos-inscritos`, {
+              headers: token
+                ? { Authorization: `Bearer ${token}` }
+                : undefined,
+            })
+          : Promise.resolve(null),
+      ]);
 
+      // --- eventos gerais ---
+      let eventsData = [];
       try {
-        data = await response.json();
+        eventsData = await eventsRes.json();
       } catch {
-        data = [];
+        eventsData = [];
       }
 
-      if (!response.ok) {
-        throw new Error(data?.error || 'Erro ao carregar eventos');
+      if (!eventsRes.ok) {
+        throw new Error(eventsData?.error || 'Erro ao carregar eventos');
       }
 
-      // back já retorna no formato:
-      // [{ id, title, location, date, price, imageUrl, subscribersCount, ... }]
-      setEvents(data);
+      setEvents(eventsData);
+
+      // --- meus eventos (inscrições) ---
+      if (myEventsRes) {
+        let myEventsData = [];
+        try {
+          myEventsData = await myEventsRes.json();
+        } catch {
+          myEventsData = [];
+        }
+
+        if (myEventsRes.ok && Array.isArray(myEventsData)) {
+          const ids = new Set(
+            myEventsData.map((ev) => String(ev.id)),
+          );
+          setSubscribedEventIds(ids);
+        }
+      }
     } catch (err) {
       console.log('[HomeScreen] erro ao buscar eventos:', err);
       setError(err.message || 'Erro ao carregar eventos');
@@ -46,7 +74,6 @@ export function HomeScreen({ navigation }) {
     fetchEvents();
   }, []);
 
-  // Estado de loading
   if (isLoadingEvents) {
     return (
       <Center flex={1}>
@@ -56,7 +83,6 @@ export function HomeScreen({ navigation }) {
     );
   }
 
-  // Estado de erro
   if (error) {
     return (
       <Center flex={1} px="$4">
@@ -74,7 +100,6 @@ export function HomeScreen({ navigation }) {
     );
   }
 
-  // Sem eventos
   if (!events.length) {
     return (
       <Center flex={1} px="$4">
@@ -90,21 +115,27 @@ export function HomeScreen({ navigation }) {
       <FlashList
         data={events}
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <EventCard
-            date={item.date}
-            title={item.title}
-            location={item.location}
-            price={item.price}
-            subscribersCount={item.subscribersCount}
-            imageUrl={item.imageUrl}
-            onPress={() =>
-              navigation.navigate('EventRegister', {
-                event: item,
-              })
-            }
-          />
-        )}
+        renderItem={({ item }) => {
+          const isSubscribed = subscribedEventIds.has(String(item.id));
+
+          return (
+            <EventCard
+              date={item.date}
+              title={item.title}
+              location={item.location}
+              price={item.price}
+              subscribersCount={item.subscribersCount}
+              imageUrl={item.imageUrl}
+              isSubscribed={isSubscribed} // 👈 usa no card
+              onPress={() =>
+                navigation.navigate('EventRegister', {
+                  event: item,
+                  isSubscribed, // 👈 passa pro detalhe também
+                })
+              }
+            />
+          );
+        }}
         estimatedItemSize={140}
       />
     </View>
