@@ -8,37 +8,37 @@ import {
   Text,
   VStack,
 } from '@gluestack-ui/themed';
+import { useFocusEffect } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { EventCard } from '../../components/EventCard/EventCard';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'http://localhost:3333'
+const API_URL = 'http://localhost:3333'; 
+// se for device físico: http://IP_DA_MAQUINA:3333
 
 export function MyEventsScreen({ navigation }) {
   const { user, token } = useAuth();
 
   const [myEvents, setMyEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const hasEvents = myEvents.length > 0;
+  async function fetchMyEvents() {
+    if (!user?.id) return;
 
-  const fetchMyEvents = useCallback(async () => {
-    if (!user || !token) return;
-
-    setError(null);
     setIsLoading(true);
+    setError(null);
 
     try {
-      // 👇 ajuste a rota se no back estiver diferente
       const response = await fetch(
         `${API_URL}/usuarios/${user.id}/eventos-inscritos`,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            // se um dia você proteger essa rota com auth:
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         },
       );
@@ -51,64 +51,62 @@ export function MyEventsScreen({ navigation }) {
       }
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Erro ao carregar seus eventos.');
+        throw new Error(data?.error || 'Erro ao carregar seus eventos');
       }
 
-      // Se o back já devolve no formato certo, é só setar:
-      setMyEvents(data || []);
+      // back já retorna só eventos com inscrição ativa (status = 'inscrito')
+      setMyEvents(data);
     } catch (err) {
-      console.log('[MyEventsScreen] erro ao buscar eventos do usuário:', err);
-      setError(err.message || 'Erro ao carregar seus eventos.');
+      console.log('[MyEventsScreen] erro ao buscar meus eventos:', err);
+      setError(err.message || 'Erro ao carregar seus eventos');
     } finally {
       setIsLoading(false);
     }
-  }, [user, token]);
-
-  // Carrega ao montar a tela
-  useEffect(() => {
-    fetchMyEvents();
-  }, [fetchMyEvents]);
-
-  async function handleRefresh() {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    try {
-      await fetchMyEvents();
-    } finally {
-      setIsRefreshing(false);
-    }
   }
 
-  // Estado de carregando inicial
-  if (isLoading && !isRefreshing && myEvents.length === 0) {
+  // Recarrega sempre que a tela ganhar foco
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyEvents();
+    }, [user?.id]),
+  );
+
+  if (isLoading) {
     return (
-      <Center flex={1} bg="#F3F4F6">
-        <Spinner size="large" />
-        <Text mt="$3" color="#4B5563">
-          Carregando seus eventos...
+      <Center flex={1}>
+        <Spinner />
+        <Text mt="$2">Carregando seus eventos...</Text>
+      </Center>
+    );
+  }
+
+  if (error) {
+    return (
+      <Center flex={1} px="$4">
+        <Text textAlign="center" mb="$3" color="$red600">
+          {error}
+        </Text>
+        <Text
+          color="$blue600"
+          onPress={fetchMyEvents}
+          style={{ textDecorationLine: 'underline' }}
+        >
+          Tentar novamente
         </Text>
       </Center>
     );
   }
 
+  const hasEvents = myEvents.length > 0;
+
   return (
     <Box flex={1} bg="#F3F4F6" px="$3" pt="$3">
-      {error && (
-        <Box mb="$3" px="$3" py="$2" bg="#FEE2E2" borderRadius={12}>
-          <Text color="#B91C1C" fontSize={13}>
-            {error}
-          </Text>
-        </Box>
-      )}
-
       {hasEvents ? (
         <FlashList
           data={myEvents}
           keyExtractor={(item) => String(item.id)}
           estimatedItemSize={180}
           contentContainerStyle={{ paddingBottom: 24 }}
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
           renderItem={({ item }) => (
             <EventCard
               date={item.date}
@@ -133,7 +131,7 @@ export function MyEventsScreen({ navigation }) {
           justifyContent="center"
           space="md"
         >
-          <Text fontSize={16} color="#4B5563" textAlign="center">
+          <Text fontSize={16} color="#4B5563">
             Você ainda não está inscrito em nenhum evento.
           </Text>
 
