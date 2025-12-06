@@ -15,8 +15,8 @@ export function EventCard({
   subscribersCount,
   imageUrl,
   onPress,
+  isSubscribed = false,   // 👈 NOVO
 }) {
-  // suporta "18/03" ou "18/03/2025"
   const [day, month] = date.split('/');
   const monthNumber = parseInt(month, 10) || 1;
   const monthLabel = MONTH_LABELS[monthNumber - 1] || month;
@@ -69,6 +69,25 @@ export function EventCard({
               {monthLabel}
             </Text>
           </Box>
+
+          {/* SELO "JÁ INSCRITO" */}
+          {isSubscribed && (
+            <Box
+              px="$2"
+              py="$1"
+              borderRadius={999}
+              bg="rgba(22,163,74,0.9)"
+              style={{ position: 'absolute', top: 10, right: 10 }}
+            >
+              <Text
+                fontSize={11}
+                color="#ECFDF5"
+                style={{ fontWeight: '700' }}
+              >
+                Já inscrito
+              </Text>
+            </Box>
+          )}
         </Box>
 
         {/* CORPO DO CARD */}
