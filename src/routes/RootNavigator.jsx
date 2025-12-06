@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { EventRegisterScreen } from '../screens/EventRegister/EventRegisterScreen';
 import { LoginScreen } from '../screens/Login/LoginScreen';
+import { RegisterScreen } from '../screens/Register/RegisterScreen';
 import { AppDrawer } from './AppDrawer';
 
 const Stack = createNativeStackNavigator();
@@ -15,6 +16,7 @@ export function RootNavigator() {
         initialRouteName="Login"
       >
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen}  options={{ headerShown: true, title: 'Criar conta' }}/>
         <Stack.Screen name="App" component={AppDrawer} />
         <Stack.Screen
           name="EventRegister"

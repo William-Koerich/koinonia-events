@@ -2,11 +2,12 @@
 import {
   Box,
   Center,
+  HStack,
   Image,
   Input,
   InputField,
   Text,
-  VStack
+  VStack,
 } from '@gluestack-ui/themed';
 import { useState } from 'react';
 import LogoProgenos from '../../../assets/images/logo-progenos.png';
@@ -54,7 +55,7 @@ export function LoginScreen({ navigation }) {
           alt="Progenos"
           resizeMode="contain"
           h={140}
-          w={"100%"}
+          w="100%"
           alignSelf="center"
           mb="$6"
         />
@@ -107,6 +108,22 @@ export function LoginScreen({ navigation }) {
           >
             {isLoadingAuth ? 'Entrando...' : 'Login'}
           </PrimaryButton>
+
+          {/* LINK CRIAR CONTA */}
+          <HStack mt="$4" justifyContent="center">
+            <Text fontSize="$sm" color="$coolGray600">
+              Não tem conta?
+            </Text>
+            <Text
+              ml="$1"
+              fontSize="$sm"
+              color="$blue600"
+              onPress={() => navigation.navigate('Register')}
+              style={{ fontWeight: '600' }}
+            >
+              Criar conta
+            </Text>
+          </HStack>
         </VStack>
       </Box>
     </Center>

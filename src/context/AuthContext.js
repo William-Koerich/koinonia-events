@@ -1,11 +1,7 @@
+// src/context/AuthContext.js
 import { createContext, useContext, useState } from 'react';
 
-const MOCK_USER = {
-  email: 'admin@koinonia.com',
-  password: '123456',
-  name: 'Admin Koinonia',
-  type: 'admin',
-};
+const API_URL = 'http://localhost:3333'; 
 
 const AuthContext = createContext(undefined);
 
@@ -16,14 +12,38 @@ export function AuthProvider({ children }) {
   async function signIn(email, password) {
     setIsLoadingAuth(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      console.log('[Auth] tentando login em:', `${API_URL}/auth/login`);
 
-      if (email === MOCK_USER.email && password === MOCK_USER.password) {
-        setUser({ name: MOCK_USER.name, email: MOCK_USER.email });
-        console.log('[Auth] login bem-sucedido');
-      } else {
-        throw new Error('E-mail ou senha inválidos');
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          senha: password, // 👈 tem que bater com o back
+        }),
+      });
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
       }
+
+      console.log('[Auth] status login:', response.status, 'body:', data);
+
+      if (!response.ok) {
+        const msg = data?.error || `Erro ao fazer login (status ${response.status})`;
+        throw new Error(msg);
+      }
+
+      setUser(data.user);
+      console.log('[Auth] login bem-sucedido:', data.user);
+
+      return data.user;
+    } catch (err) {
+      console.log('[Auth] erro signIn:', err);
+      throw err;
     } finally {
       setIsLoadingAuth(false);
     }
