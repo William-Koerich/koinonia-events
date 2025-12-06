@@ -1,49 +1,95 @@
-import { View } from '@gluestack-ui/themed';
+// src/screens/Home/HomeScreen.js
+import { Center, Spinner, Text, View } from '@gluestack-ui/themed';
 import { FlashList } from '@shopify/flash-list';
+import { useEffect, useState } from 'react';
 import { EventCard } from '../../components/EventCard/EventCard';
 import { useAuth } from '../../context/AuthContext';
 
+// Usa a mesma lógica de URL que você já usa no AuthContext
+const API_URL = 'http://localhost:3333'
 export function HomeScreen({ navigation }) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const [events, setEvents] = useState([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [error, setError] = useState(null);
 
-  const events = [
-  {
-    id: '1',
-    date: '18/03/2025',
-    title: 'Conferência de Tecnologia',
-    location: 'Igreja Koinonia',
-    price: 'R$ 150,00',
-    subscribersCount: 32,
-    imageUrl:
-      'https://images.pexels.com/photos/3184160/pexels-photo-3184160.jpeg',
-    description:
-      'Um dia inteiro de palestras e atividades voltadas para tecnologia, inovação e desenvolvimento de software com foco no ministério e na igreja.',
-    attractions:
-      'Palestras com especialistas em TI, momentos de networking, painéis de discussão e espaço para perguntas e respostas.',
-  },
-  {
-    id: '2',
-    date: '20/03/2025',
-    title: 'Workshop de React Native',
-    location: 'Online',
-    price: 'Gratuito',
-    subscribersCount: 120,
-    imageUrl:
-      'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg',
-    description:
-      'Workshop prático de React Native para quem quer aprender a criar aplicativos do zero, com foco em projetos para a igreja.',
-    attractions:
-      'Aulas ao vivo, demonstração prática de código, material de apoio e sessão de dúvidas ao final.',
-  },
-];
+  async function fetchEvents() {
+    setIsLoadingEvents(true);
+    setError(null);
 
-  const rootNavigation = navigation.getParent(); // Stack do RootNavigator
+    try {
+      const response = await fetch(`${API_URL}/eventos`);
+      let data = [];
+
+      try {
+        data = await response.json();
+      } catch {
+        data = [];
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Erro ao carregar eventos');
+      }
+
+      // back já retorna no formato:
+      // [{ id, title, location, date, price, imageUrl, subscribersCount, ... }]
+      setEvents(data);
+    } catch (err) {
+      console.log('[HomeScreen] erro ao buscar eventos:', err);
+      setError(err.message || 'Erro ao carregar eventos');
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  // Estado de loading
+  if (isLoadingEvents) {
+    return (
+      <Center flex={1}>
+        <Spinner />
+        <Text mt="$2">Carregando eventos...</Text>
+      </Center>
+    );
+  }
+
+  // Estado de erro
+  if (error) {
+    return (
+      <Center flex={1} px="$4">
+        <Text textAlign="center" mb="$3" color="$red600">
+          {error}
+        </Text>
+        <Text
+          color="$blue600"
+          onPress={fetchEvents}
+          style={{ textDecorationLine: 'underline' }}
+        >
+          Tentar novamente
+        </Text>
+      </Center>
+    );
+  }
+
+  // Sem eventos
+  if (!events.length) {
+    return (
+      <Center flex={1} px="$4">
+        <Text textAlign="center" color="$coolGray600">
+          Nenhum evento disponível no momento.
+        </Text>
+      </Center>
+    );
+  }
 
   return (
     <View style={{ flex: 1, padding: 16 }}>
       <FlashList
         data={events}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
           <EventCard
             date={item.date}
@@ -52,12 +98,15 @@ export function HomeScreen({ navigation }) {
             price={item.price}
             subscribersCount={item.subscribersCount}
             imageUrl={item.imageUrl}
-            onPress={() => navigation.navigate('EventRegister', { event: item })}
+            onPress={() =>
+              navigation.navigate('EventRegister', {
+                event: item,
+              })
+            }
           />
         )}
-        estimatedItemSize={100}
+        estimatedItemSize={140}
       />
     </View>
   );
-
 }
