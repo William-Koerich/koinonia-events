@@ -1,7 +1,8 @@
 // src/screens/Home/HomeScreen.js
 import { Center, Spinner, Text, View } from '@gluestack-ui/themed';
+import { useFocusEffect } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { EventCard } from '../../components/EventCard/EventCard';
 import { useAuth } from '../../context/AuthContext';
 
@@ -15,12 +16,11 @@ export function HomeScreen({ navigation }) {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [error, setError] = useState(null);
 
-  async function fetchEvents() {
+  const fetchEvents = useCallback(async () => {
     setIsLoadingEvents(true);
     setError(null);
 
     try {
-      // 1) busca todos os eventos
       const [eventsRes, myEventsRes] = await Promise.all([
         fetch(`${API_URL}/eventos`),
         user
@@ -56,11 +56,13 @@ export function HomeScreen({ navigation }) {
         }
 
         if (myEventsRes.ok && Array.isArray(myEventsData)) {
-          const ids = new Set(
-            myEventsData.map((ev) => String(ev.id)),
-          );
+          const ids = new Set(myEventsData.map(ev => String(ev.id)));
           setSubscribedEventIds(ids);
+        } else {
+          setSubscribedEventIds(new Set());
         }
+      } else {
+        setSubscribedEventIds(new Set());
       }
     } catch (err) {
       console.log('[HomeScreen] erro ao buscar eventos:', err);
@@ -68,11 +70,19 @@ export function HomeScreen({ navigation }) {
     } finally {
       setIsLoadingEvents(false);
     }
-  }
+  }, [user, token]);
 
+  // Carrega na primeira montagem
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [fetchEvents]);
+
+  // Recarrega toda vez que a tela ganha foco (volta do detalhe, cancelamento, etc.)
+  useFocusEffect(
+    useCallback(() => {
+      fetchEvents();
+    }, [fetchEvents]),
+  );
 
   if (isLoadingEvents) {
     return (
@@ -126,11 +136,11 @@ export function HomeScreen({ navigation }) {
               price={item.price}
               subscribersCount={item.subscribersCount}
               imageUrl={item.imageUrl}
-              isSubscribed={isSubscribed} // 👈 usa no card
+              isSubscribed={isSubscribed}
               onPress={() =>
                 navigation.navigate('EventRegister', {
                   event: item,
-                  isSubscribed, // 👈 passa pro detalhe também
+                  isSubscribed,
                 })
               }
             />
