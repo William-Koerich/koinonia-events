@@ -59,9 +59,27 @@ export function EventRegisterScreen({ route, navigation }) {
     setPeople(prev => prev.filter(p => p.id !== id));
   }
 
-  // 🔎 Busca participantes já inscritos para ESTE evento + usuário logado
+  // 🔔 Se já estiver inscrito e veio pela Home → alerta + redireciona para "Meus Eventos"
   useEffect(() => {
-    if (!user || !token || !alreadySubscribed) return;
+    if (alreadySubscribed && !isMyEvent) {
+      Alert.alert(
+        'Você já está inscrito',
+        'Você já possui uma inscrição neste evento. Vamos te levar para a tela "Meus eventos".',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.navigate('App', { screen: 'MyEvents' });
+            },
+          },
+        ],
+      );
+    }
+  }, [alreadySubscribed, isMyEvent, navigation]);
+
+  // 🔎 Busca participantes já inscritos (somente quando vier de Meus Eventos)
+  useEffect(() => {
+    if (!user || !token || !alreadySubscribed || !isMyEvent) return;
 
     async function fetchMyParticipants() {
       try {
@@ -92,7 +110,6 @@ export function EventRegisterScreen({ route, navigation }) {
           throw new Error(data?.error || 'Erro ao buscar inscrição');
         }
 
-        // espera algo como { participantes: [ { nome, idade }, ... ] }
         if (Array.isArray(data.participantes) && data.participantes.length) {
           const mapped = data.participantes.map((p, index) => ({
             id: index + 1,
@@ -112,9 +129,9 @@ export function EventRegisterScreen({ route, navigation }) {
     }
 
     fetchMyParticipants();
-  }, [user, token, currentEvent.id, alreadySubscribed]);
+  }, [user, token, currentEvent.id, alreadySubscribed, isMyEvent]);
 
-  // 👉 Criar / atualizar inscrição (pode ser usado tanto primeira vez quanto depois)
+  // 👉 Criar / atualizar inscrição
   async function handleSubmit() {
     if (!token || !user) {
       Alert.alert(
@@ -152,7 +169,7 @@ export function EventRegisterScreen({ route, navigation }) {
       const response = await fetch(
         `${API_URL}/eventos/${currentEvent.id}/inscricoes`,
         {
-          method: 'POST', // o back trata como "criar ou atualizar"
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
@@ -202,7 +219,7 @@ export function EventRegisterScreen({ route, navigation }) {
     }
   }
 
-  // 👉 Cancelar inscrição (usado principalmente em Meus Eventos)
+  // 👉 Cancelar inscrição (usado em Meus Eventos)
   async function handleCancelSubscription() {
     if (!token || !user) {
       Alert.alert(
@@ -261,12 +278,16 @@ export function EventRegisterScreen({ route, navigation }) {
   }
 
   const isConfirmDisabled =
-    isSubmitting ||
-    !people.some(p => p.name && p.name.trim());
+    isSubmitting || !people.some(p => p.name && p.name.trim());
 
   const confirmButtonLabel = alreadySubscribed
     ? 'Atualizar inscrição'
     : 'Confirmar inscrição';
+
+  // 🔕 Se já está inscrito e veio da Home, não renderiza nada (só o alerta/redirecionamento)
+  if (alreadySubscribed && !isMyEvent) {
+    return null;
+  }
 
   return (
     <Box flex={1} bg="#F3F4F6">
@@ -294,7 +315,6 @@ export function EventRegisterScreen({ route, navigation }) {
               resizeMode="cover"
             />
 
-            {/* badge de data */}
             <Box
               px="$3"
               py="$2"
@@ -312,7 +332,6 @@ export function EventRegisterScreen({ route, navigation }) {
             </Box>
           </Box>
 
-          {/* informações principais */}
           <Box px="$4" py="$3">
             <VStack space="xs">
               <Text
@@ -398,9 +417,16 @@ export function EventRegisterScreen({ route, navigation }) {
           </VStack>
         </Box>
 
-        {/* AVISO DE JÁ INSCRITO */}
-        {alreadySubscribed && (
-          <Box mt="$4" bg="#ECFDF3" borderRadius={16} p="$3" borderWidth={1} borderColor="#BBF7D0">
+        {/* AVISO DE JÁ INSCRITO (apenas se veio de Meus Eventos) */}
+        {alreadySubscribed && isMyEvent && (
+          <Box
+            mt="$4"
+            bg="#ECFDF3"
+            borderRadius={16}
+            p="$3"
+            borderWidth={1}
+            borderColor="#BBF7D0"
+          >
             <Text
               fontSize={13}
               color="#15803D"
@@ -422,7 +448,7 @@ export function EventRegisterScreen({ route, navigation }) {
             color="#111827"
             style={{ fontWeight: '600' }}
           >
-            {alreadySubscribed
+            {alreadySubscribed && isMyEvent
               ? 'Editar participantes da sua inscrição'
               : 'Inscrição dos participantes'}
           </Text>
@@ -490,7 +516,6 @@ export function EventRegisterScreen({ route, navigation }) {
                       )}
                     </HStack>
 
-                    {/* Nome */}
                     <VStack space="xs" mb="$3">
                       <Text fontSize={12} color="#6B7280">
                         Nome completo
@@ -511,7 +536,6 @@ export function EventRegisterScreen({ route, navigation }) {
                       </Input>
                     </VStack>
 
-                    {/* Idade */}
                     <VStack space="xs">
                       <Text fontSize={12} color="#6B7280">
                         Idade
@@ -535,7 +559,6 @@ export function EventRegisterScreen({ route, navigation }) {
                   </Box>
                 ))}
 
-                {/* Botão para adicionar pessoa dentro do card */}
                 <Button
                   variant="outline"
                   borderColor="#3B82F6"
@@ -550,7 +573,7 @@ export function EventRegisterScreen({ route, navigation }) {
           </Box>
         </Box>
 
-        {/* BOTÃO PRINCIPAL (criar/atualizar inscrição) */}
+        {/* BOTÃO PRINCIPAL */}
         <Box mt="$4">
           <Button
             size="lg"
@@ -573,7 +596,7 @@ export function EventRegisterScreen({ route, navigation }) {
           </Button>
         </Box>
 
-        {/* MODO "MEUS EVENTOS" → botão de cancelar inscrição */}
+        {/* Modo "Meus Eventos" → cancelar inscrição */}
         {isMyEvent && (
           <Box mt="$4">
             <Button
