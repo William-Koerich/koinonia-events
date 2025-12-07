@@ -1,13 +1,13 @@
 // src/UpdateVersion/UpdateVersion.jsx
 import {
-    Box,
-    Center,
-    Image,
-    Text,
-    VStack
+  Box,
+  Center,
+  Image,
+  Text,
+  VStack
 } from '@gluestack-ui/themed';
 import { useEffect, useState } from 'react';
-import LogoSplash from '../../assets/images/logo-splash.png';
+import LogoSplash from '../../assets/images/logo_page3.png';
 import { runSplashChecks } from '../helpers/version';
 
 export function UpdateVersion({ children }) {
