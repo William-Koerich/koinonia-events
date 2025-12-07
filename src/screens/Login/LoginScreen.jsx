@@ -10,7 +10,7 @@ import {
   VStack,
 } from '@gluestack-ui/themed';
 import { useState } from 'react';
-import LogoProgenos from '../../../assets/images/logo-progenos.png';
+import LogoKoinonia from '../../../assets/images/logo_page4.png';
 import { PrimaryButton } from '../../components/Buttons/PrimaryButton';
 import { useAuth } from '../../context/AuthContext';
 
@@ -51,10 +51,10 @@ export function LoginScreen({ navigation }) {
       >
         {/* LOGO */}
         <Image
-          source={LogoProgenos}
+          source={LogoKoinonia}
           alt="Progenos"
           resizeMode="contain"
-          h={140}
+          h={200}
           w="100%"
           alignSelf="center"
           mb="$6"
