@@ -1,5 +1,5 @@
 import { Image, View } from "react-native";
-import LogoSplash from '../../../assets/images/logo-splash.png';
+import LogoSplash from '../../../assets/images/logo_page3.png';
 
 export default function Splash() {
   return (
