@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
-    HStack,
-    Image,
-    Pressable,
-    Text,
-    VStack
+  HStack,
+  Image,
+  Pressable,
+  Text,
+  VStack
 } from '@gluestack-ui/themed';
-import LogoProgenos from '../../../assets/images/logo-progenos.png';
+import LogoProgenos from '../../../assets/images/logo_page3.png';
 
 export default function Header({ user, handleGoHome, handleLogout }) {
     return (
