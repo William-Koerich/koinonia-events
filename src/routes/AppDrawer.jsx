@@ -66,7 +66,7 @@ export function AppDrawer() {
         options={{ title: 'Meus Eventos' }}
       />
 
-      {user?.tipo === 'admin' && (
+      {user?.type === 'admin' && (
         <Drawer.Screen
           name="EventCreate"
           component={EventCreateScreen}
