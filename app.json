@@ -4,7 +4,7 @@
     "slug": "Koinonia",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo-splash.png",
+    "icon": "./assets/images/logo_page4.png",
     "scheme": "app",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -23,13 +23,13 @@
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/logo-splash.png"
+      "favicon": "./assets/images/logo_page2.png"
     },
     "plugins": [
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo-splash.png",
+          "image": "./assets/images/logo_page2.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
